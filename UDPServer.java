@@ -7,6 +7,7 @@ public class UDPServer {
 
    public static final int MAGICCHECK = 0x1234;
    public static final int GROUP_ID = 11;
+   public static final int ERROR_PACKET_LENGTH = 7;
 
    public static void main(String[] args) {
       int port;
@@ -21,14 +22,16 @@ public class UDPServer {
    }
 	
    public static void run(int port) {
+   
       try {
-         System.out.println("\nServer waiting for connections...");
          DatagramSocket servSock = new DatagramSocket(port);
-      	
-         byte[] buffer = new byte[255];
-         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
-      	
-         while(true) {
+         
+         
+         while(true) {              
+            System.out.println("\nServer waiting for connections...");
+            byte[] buffer = new byte[255];  
+            DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
+         
             System.out.println("\nReceiving data...");
             servSock.receive(incoming);
             byte[] data = incoming.getData();
@@ -42,54 +45,74 @@ public class UDPServer {
             byte gid = data[5];
             byte reqID = data[6];
          	
-            byte[] newData = new byte[tml];
-            for(int i = 0; i < tml; i++) {
-               newData[i] = data[i];
-            }
-         	
-            //newData[4] = 0;	
-            short sum = getChecksum(newData);
+            short sum = getChecksum(data);
             
             
+            byte errorCode = 0;
             if(magicNum == 0 || tml <= 7 || sum != 0xFF) {
                if(magicNum == 0) {
+                  errorCode = getByteErrorCode(2);
                   System.out.println("\nMessage is invalid: No magic number.");
-                  System.exit(0);
+               
                }
                else if(tml <= 7) {
+                  errorCode = getByteErrorCode(0);
                   System.out.println("\nMessage is invalid: Request too short.");
-                  System.exit(0);
+               
                }
                else if(sum != 0xFF) {
+                  errorCode = getByteErrorCode(1);
                   System.out.println("\nMessage is invalid: Bad checksum.");
-                  System.exit(0);
+               
                }
+               byte[] sendData = new byte[255];
+               sendData[0] = 0x12;
+               sendData[1] = 0x34;
+               sendData[2] = (byte) (ERROR_PACKET_LENGTH & 0x00FF);
+               sendData[3] = (byte) ((ERROR_PACKET_LENGTH >> 8) & 0x00FF);
+               sendData[4] = 0;
+               sendData[5] = 11;
+               sendData[6] = errorCode;
+               sendData[4] = (byte) ~(getChecksum(sendData));
+               DatagramPacket sendPacket = 
+                  new DatagramPacket(sendData, sendData.length, incoming.getAddress(), port);
+               servSock.send(sendPacket);
+               incoming = null;
+               System.out.println("Sent error packet to " + host + " successfully.");
             }
             else {
-               int totalHosts = (tml - 7) / 2;
-               int newTML = 7 + totalHosts * 4;
-               byte[] send = new byte[newTML];
                
-               send[0] = 0x34;
-               send[1] = 0x12;
-               send[2] = (byte) (newTML & 0xFF);
-               send[3] = (byte) ((newTML >> 8) & 0xFF);
+               int totalHosts = 0;
+               int i = 7;
+               int newTML = 7 + totalHosts * 4;
+               byte[] send = new byte[255];
+               
+               send[0] = 0x12;
+               send[1] = 0x34;
+               send[2] = (byte) (newTML & 0x00FF);
+               send[3] = (byte) ((newTML >> 8) & 0x00FF);
                send[4] = 0;
                send[5] = 11;
                send[6] = reqID;
+               while (i < tml - 1) {
+                  int bytesToJump = data[i] + 1;
+                  totalHosts += 1;
+                  i += bytesToJump;
+               }
                
                int length = 0;
                int msgLength = 0;
                int counter = 7;
-               
-               for(int i = 7; i < tml; i += length) {
-                  length = data[i];
+               int factor = 0;
+               for(int n = 7; factor < totalHosts; n += length) {
+                  length = data[n + factor];
                   byte[] variable = new byte[length];
-                  msgLength = i + length;
+                  msgLength = n+length;
                   
-                  for(int j = i+1; j < msgLength; j++) {
+                  for(int j = n+1; j < msgLength;) {
                      for(int k = 0; k < length; k++) {
-                        variable[k] = data[j];
+                        variable[k] = data[j + factor];
+                        j++;
                      }
                   }
                   
@@ -102,14 +125,25 @@ public class UDPServer {
                 
                   System.arraycopy(bb.array(), 0, send, counter, 4);
                   counter = counter + 4;
+                  factor++;
+                  
                }
+               send[4] = (byte) ~(getChecksum(send));
+               DatagramPacket sendPacket = 
+                  new DatagramPacket(send, send.length, incoming.getAddress(), port);
+               servSock.send(sendPacket);
+               incoming = null;
+               System.out.println("Sent packet to " + host + " successfully.");
             }
-         					
-         }
+            
+            
+         }			
       }
+      
       catch (IOException e) {
          System.out.println(e);
       }
+      
    }
 	
    public static short getChecksum(byte[] data) {
@@ -121,6 +155,24 @@ public class UDPServer {
       return checksum;
    }
    
+   public static byte getByteErrorCode(int type) {
+      byte bec = 0;
+      switch (type) {
+         case 0:
+            bec = (byte) (bec | (1 << 0));
+            break;
+         case 1:
+            bec = (byte) (bec | (1 << 1));
+            break;
+         case 2:
+            bec = (byte) (bec | (1 << 2));
+            break;
+         default:
+            break;    
+      }        
+      return bec;
+   }
+
    public static int IPtoInt(byte[] bytes) {
       int val = 0;
       for(int i = 0; i < bytes.length; i++) {
