@@ -41,6 +41,8 @@ int main(int argc, char *argv[])
 	time.tv_usec = 0;
 	
 	struct addrinfo hints, *servinfo, *p;
+	struct sockaddr_storage their_addr;
+	socklen_t addr_len;
 	int rv;
 	int numbytes;
 	
@@ -50,12 +52,13 @@ int main(int argc, char *argv[])
 	}
 
 	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_PASSIVE;
 	static char* const SERVER = argv[1];
 	static char* const PORT = argv[2];
 	static uint32_t const REQUEST_ID = atoi(argv[3]);	 
-	if ((rv = getaddrinfo(SERVER, PORT, &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(SERVER, PORT, &hints, &p)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
@@ -72,8 +75,8 @@ int main(int argc, char *argv[])
 	
 	msg[0] = MAGIC_NUMBER_LSB;
 	msg[1] =  MAGIC_NUMBER_MSB;
-	msg[2] = (uint8_t)(TML >> 8) & 0x00FF;
-	msg[3] = (uint8_t)(TML) & 0x00FF;
+	msg[2] = (uint8_t)(TML >> 8) & 0xFF;
+	msg[3] = (uint8_t)(TML >> 0) & 0xFF;
 	msg[4] = NULL;
 	msg[5] = GROUP_ID;
 	msg[6] = REQUEST_ID;
@@ -95,18 +98,18 @@ int main(int argc, char *argv[])
 	
 	
 	// loop through all the results and make a socket
-	for(p = servinfo; p != NULL; p = p->ai_next) {
+	
 		if ((sockfd = socket(p->ai_family, p->ai_socktype,
 				p->ai_protocol)) == -1) {
 			perror("talker: socket");
-			continue;
+			
 		}
 
-		break;
-	}
+		
+	
 	if (p == NULL) {
 		perror("error creating socket");
-		return 2;
+		exit(1);
 	}
 	if ((numbytes = sendto(sockfd, msg, TML, 0, 
 		p->ai_addr, p->ai_addrlen)) == -1) {
@@ -115,13 +118,34 @@ int main(int argc, char *argv[])
 		exit(1);
 	
 	}
-	printf("Message sent successfully\n");
-	char buf[255];
+	printf("Message sent.");
+	addr_len = sizeof(their_addr);
+	unsigned char buf[255]; 
+	
 	memset(&buf,0,sizeof(buf));
-	if (numbytes = recvfrom(sockfd, buf, strlen(buf), 0, p->ai_addr, &p->ai_addrlen) == -1) {
-	perror("recv");
-	exit(1);
-
+	
+	printf("Listening for data...");
+	int bytes_rec = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&their_addr, &addr_len);
+	if (bytes_rec < 0) {
+		perror("recv");
+		exit(1);
 }
+	printf("Received data...\n");
+	unsigned int magic_number = (buf[0] << 8) | buf[1]; 
+	if (magic_number != 0x1234) {
+		printf("Server response is invalid\n\n");
+	
+	}
+	TML = ((buf[2] << 8) | buf[3]);
+	if (numbytes != TML) {
+		printf("There is a length mismatch involving the server response\n\n");
+	
+	}
+
+	if (compute_checksum(buf, TML) != 0xFF) {
+		printf("Error: Bad checksum\n\n");
+	}
+
+	close(sockfd);	
 	return 0;
 }
