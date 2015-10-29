@@ -82,88 +82,88 @@ int main(int argc, char *argv[])
 	unsigned char buf[255];
 	memset(&buf, 0,sizeof(buf));
 	while (num_trials < 7 && valid_response == 0) {
-	msg[0] = MAGIC_NUMBER_LSB;
-	msg[1] =  MAGIC_NUMBER_MSB;
-	msg[2] = (uint8_t)(TML >> 8) & 0xFF;
-	msg[3] = (uint8_t)(TML >> 0) & 0xFF;
-	msg[4] = NULL;
-	msg[5] = GROUP_ID;
-	msg[6] = REQUEST_ID;
-	int c = 6;
-	int i = 1;
-	int host_counter = num_hosts; 
-	while(host_counter > 0) {
-		char* host_name = argv[argc - host_counter];
-		int host_len = strlen(host_name);
-		msg[c + i] = host_len;
-		memcpy(&msg[c + (i + 1)], host_name, strlen(host_name) + 1);
-		c+=strlen(host_name);
-		i++;
-		host_counter--; 	
-	
-	}
-	msg[4] =  ~(compute_checksum(msg, TML));
-	
-	
-	
-	// loop through all the results and make a socket
-	
-		if ((sockfd = socket(p->ai_family, p->ai_socktype,
-				p->ai_protocol)) == -1) {
-			perror("talker: socket");
-			
+		msg[0] = MAGIC_NUMBER_LSB;
+		msg[1] =  MAGIC_NUMBER_MSB;
+		msg[2] = (uint8_t)(TML >> 8) & 0xFF;
+		msg[3] = (uint8_t)(TML >> 0) & 0xFF;
+		msg[4] = NULL;
+		msg[5] = GROUP_ID;
+		msg[6] = REQUEST_ID;
+		int c = 6;
+		int i = 1;
+		int host_counter = num_hosts; 
+		while(host_counter > 0) {
+			char* host_name = argv[argc - host_counter];
+			int host_len = strlen(host_name);
+			msg[c + i] = host_len;
+			memcpy(&msg[c + (i + 1)], host_name, strlen(host_name) + 1);
+			c+=strlen(host_name);
+			i++;
+			host_counter--; 	
+		
 		}
-
+		msg[4] =  ~(compute_checksum(msg, TML));
+		
+		
+		
+		// loop through all the results and make a socket
+		
+			if ((sockfd = socket(p->ai_family, p->ai_socktype,
+					p->ai_protocol)) == -1) {
+				perror("talker: socket");
+				
+			}
+	
+			
+		
+		if (p == NULL) {
+			perror("error creating socket");
+			exit(1);
+		}
+		if ((numbytes = sendto(sockfd, msg, TML, 0, 
+			p->ai_addr, p->ai_addrlen)) == -1) {
+	
+			perror("error sending message");	
+			exit(1);
+		
+		}
+		printf("Message sent.\n");
+		addr_len = sizeof(their_addr);
+		 
+		
+		memset(&buf,0,sizeof(buf));
+		
+		printf("Listening for data...\n\n");
+		int bytes_rec = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&their_addr, &addr_len);
+		if (bytes_rec < 0) {
+			perror("recv");
+			exit(1);
+	}
+		printf("Received data...\n");
+		unsigned int magic_number = (buf[0] << 8) | buf[1];
+		TML = ((buf[2] << 8) | buf[3]);
+		if (TML == 7) {
+			if (buf[6] == 4) {
+				printf("Attempt %d:\nReceived error code 4: Magic number invalid\n\n", num_trials + 1);
+				num_trials++;
+				continue;
+			}
+			if ( buf[6] == 1) {
+				printf("Attempt %d:\nReceived error code 1: packet length mismatch\n\n", num_trials + 1);
+				num_trials++;
+				continue;
+		
+			}
 		
 	
-	if (p == NULL) {
-		perror("error creating socket");
-		exit(1);
-	}
-	if ((numbytes = sendto(sockfd, msg, TML, 0, 
-		p->ai_addr, p->ai_addrlen)) == -1) {
-
-		perror("error sending message");	
-		exit(1);
-	
-	}
-	printf("Message sent.\n");
-	addr_len = sizeof(their_addr);
-	 
-	
-	memset(&buf,0,sizeof(buf));
-	
-	printf("Listening for data...\n\n");
-	int bytes_rec = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&their_addr, &addr_len);
-	if (bytes_rec < 0) {
-		perror("recv");
-		exit(1);
-}
-	printf("Received data...\n");
-	unsigned int magic_number = (buf[0] << 8) | buf[1];
-	TML = ((buf[2] << 8) | buf[3]);
-	if (TML == 7) {
-		if (buf[6] == 4) {
-			printf("Attempt %d:\nReceived error code 4: Magic number invalid\n\n", num_trials + 1);
-			num_trials++;
-			continue;
+			if (buf[6] == 2) {
+				printf("Attempt %d:\nReceived error code 2: Bad checksum\n\n", num_trials + 1);
+				num_trials++;
+				continue;
+			}
 		}
-		if ( buf[6] == 1) {
-			printf("Attempt %d:\nReceived error code 1: packet length mismatch\n\n", num_trials + 1);
-			num_trials++;
-			continue;
-	
-		}
-	
-
-		if (buf[6] == 2) {
-			printf("Attempt %d:\nReceived error code 2: Bad checksum\n\n", num_trials + 1);
-			num_trials++;
-			continue;
-		}
-	}
-	valid_response = 1;
-	close(sockfd);	
+		valid_response = 1;
+		close(sockfd);	
 	}
 	if (valid_response) {
 		print_ips(buf, TML);
