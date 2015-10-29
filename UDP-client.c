@@ -15,7 +15,13 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
- 
+void print_ips(const unsigned char* buf, int TML) {
+	int ip_index = 7;
+	while (ip_index < TML) {
+		printf("Resolved IP Addresses: %d.%d.%d.%d\n", buf[ip_index], buf[ip_index + 1], buf[ip_index + 2], buf[ip_index + 3]);
+		ip_index+=4;
+	}
+ }
 short compute_checksum(const unsigned char* msg, int TML) {
 	short sum = 0;
 	int i = 0;
@@ -45,7 +51,7 @@ int main(int argc, char *argv[])
 	socklen_t addr_len;
 	int rv;
 	int numbytes;
-	
+		
 	if (argc < 5) {
 		fprintf(stderr,"usage: server portnum request_id h1 h2..\n");
 		exit(1);
@@ -64,7 +70,7 @@ int main(int argc, char *argv[])
 	}
 	unsigned int num_hosts = argc - 4;
 	unsigned int header_len = 7;
-
+	int num_trials = 0;
 	int j = 4;
 	int TML = header_len + num_hosts;
 	while (j < argc) {
@@ -72,7 +78,10 @@ int main(int argc, char *argv[])
 		j++;
 	}
 	unsigned char*  msg = (unsigned char*)calloc(0, TML * sizeof(unsigned char) + 1);	
-	
+	int valid_response = 0;
+	unsigned char buf[255];
+	memset(&buf, 0,sizeof(buf));
+	while (num_trials < 7 && valid_response == 0) {
 	msg[0] = MAGIC_NUMBER_LSB;
 	msg[1] =  MAGIC_NUMBER_MSB;
 	msg[2] = (uint8_t)(TML >> 8) & 0xFF;
@@ -118,34 +127,52 @@ int main(int argc, char *argv[])
 		exit(1);
 	
 	}
-	printf("Message sent.");
+	printf("Message sent.\n");
 	addr_len = sizeof(their_addr);
-	unsigned char buf[255]; 
+	 
 	
 	memset(&buf,0,sizeof(buf));
 	
-	printf("Listening for data...");
+	printf("Listening for data...\n\n");
 	int bytes_rec = recvfrom(sockfd, buf, sizeof(buf), 0, (struct sockaddr *)&their_addr, &addr_len);
 	if (bytes_rec < 0) {
 		perror("recv");
 		exit(1);
 }
 	printf("Received data...\n");
-	unsigned int magic_number = (buf[0] << 8) | buf[1]; 
-	if (magic_number != 0x1234) {
-		printf("Server response is invalid\n\n");
-	
-	}
+	unsigned int magic_number = (buf[0] << 8) | buf[1];
 	TML = ((buf[2] << 8) | buf[3]);
-	if (numbytes != TML) {
-		printf("There is a length mismatch involving the server response\n\n");
+	if (TML == 7) {
+		if (buf[6] == 4) {
+			printf("Attempt %d:\nReceived error code 4: Magic number invalid\n\n", num_trials + 1);
+			num_trials++;
+			continue;
+		}
+		if ( buf[6] == 1) {
+			printf("Attempt %d:\nReceived error code 1: packet length mismatch\n\n", num_trials + 1);
+			num_trials++;
+			continue;
 	
-	}
+		}
+	
 
-	if (compute_checksum(buf, TML) != 0xFF) {
-		printf("Error: Bad checksum\n\n");
+		if (buf[6] == 2) {
+			printf("Attempt %d:\nReceived error code 2: Bad checksum\n\n", num_trials + 1);
+			num_trials++;
+			continue;
+		}
 	}
-
+	valid_response = 1;
 	close(sockfd);	
-	return 0;
+	}
+	if (valid_response) {
+		print_ips(buf, TML);
+	}
+	else 
+		printf("Number of trials exceeded 7. Exiting..\n\n");
+
+	
+
+
+
 }
