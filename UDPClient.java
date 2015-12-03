@@ -18,7 +18,7 @@ public class UDPClient {
         int my_port = Integer.parseInt(args[2]);
 
         System.out.println("\nConnecting to server...");
-        run(server_name, server_port);
+        run(server_name, server_port, my_port);
     }
     else {
       System.out.println("\nPlease enter:"
@@ -28,36 +28,89 @@ public class UDPClient {
     }
   }
 
-  public static void run(String server, int port) {
+  public static void run(String server, int port, int myPort) {
     try {
         DatagramSocket clientSocket = new DatagramSocket();
         InetAddress ipAddress = InetAddress.getByName(server);
-        int port_LSB = port << 8;
-        int port_MSB = port;
+        int port_MSB = port >> 8 & 0xFF;
+        int port_LSB = port >> 0 & 0xFF;
+
 
         byte[] sendData = new byte[5];
         sendData[0] = (byte) MAGICNUM_LSB;
         sendData[1] = (byte) MAGICNUM_MSB;
-        sendData[2] = (byte) port_LSB;
-        sendData[3] = (byte) port_MSB;
+        sendData[2] = (byte) port_MSB;
+        sendData[3] = (byte) port_LSB;
         sendData[4] = GROUP_ID;
 
         DatagramPacket sendPacket =
           new DatagramPacket(sendData, sendData.length, ipAddress, port);
+        clientSocket.send(sendPacket);
 
         byte[] buffer = new byte[255];
         DatagramPacket incoming = new DatagramPacket(buffer, buffer.length);
-        byte[] data = incoming.getData();
+        System.out.println("\nReceiving data...");
+        clientSocket.receive(incoming);
 
-        if(data.length == 2) {
-            TCPServer(port);
+        InetAddress IPAddress = incoming.getAddress();
+        String host = IPAddress.getHostAddress();
+        System.out.println("Connected to: " + host);
+
+        byte[] data = incoming.getData();
+        int magicNum = 0xA5;
+        int one = 0x01;
+
+        boolean correctMagic = (data[0] == (byte) magicNum
+                                && data[1] == (byte) magicNum);
+        boolean correctGID = (data[2] == GROUP_ID);
+        boolean invalidReq = (data[3] == 0x00);
+
+        //Check if invalid request
+        if (invalidReq) {
+          if (data[4] == (byte) one){
+            System.out.print("Request does not contain a magic Number")
+          }
+          else if (data[5] == (byte) one) {
+            System.out.print("Length is not correct in request")
+          }
+          else {
+            System.out.print("Port number is out of range")
+          }
         }
-        else if(data.length == 7){
-            TCPClient(data);
-        }
+        //If not invalid check if magic number returned is correct and whether GroupID
+        //or IP address is the next bit
         else {
-            System.out.println("\nSomething wrong happened.");
-            System.exit(0);
+          if(correctMagic) {
+            if (correctGID) {
+                System.out.print("Magic number: " + data[0] + data[1]);
+                //These print statements are for debuggin purposes
+                System.out.print("Group id: " + data[3])
+                int portN = ((data[4] & 0xFF) << 8) | (data[5] & 0xFF);
+                System.out.print("Port Number: " + portN);
+                System.out.print("Port Number: " + incoming.getPort());
+                TCPServer(myPort);
+            }
+            else {
+                System.out.print("Magic number: " + data[0] + data[1]);
+                System.out.println("IP Address: " + host + "on Port" + incoming.getPort() );
+                String ipIn = data[2] + data[3] + data[4] + data[5];
+                int portN = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
+                TCPClient(data);
+            }
+             // if(data.length == 2) {
+             //     System.out.print("Magic number: " + data[0] + data[1]);
+             //     TCPServer(myPort);
+             // }
+             // else if(data.length == 7){
+             //     System.out.print("Magic number: " + data[0] + data[1]);
+             //     System.out.println("IP Address: " + host + "on Port" + incoming.getPort() );
+             //     TCPClient(data);
+             // }
+          }
+          else {
+              System.out.println("\nInvalid response, error occurred, bad magic Number.");
+              System.exit(0);
+          }
         }
     }
     catch (Exception e) {
@@ -111,6 +164,7 @@ public class UDPClient {
     int magicNum = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
     byte[] variable = new byte[4];
     int servPort = data[6];
+    // int servPort2 = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
     int j = 0;
     for(int i = 2; i < 6; i++) {
