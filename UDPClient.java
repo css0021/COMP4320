@@ -8,7 +8,7 @@ public class UDPClient {
   public static final int MAGICNUM_LSB = 0xA5 & 0x00FF;
   public static final int MAGICNUM_MSB = 0xA5 & 0x00FF;
   public static final int GROUP_ID = 11;
-  public static final String quitMsg = "Bye bye Birdie";
+  public static final String quitMsg = "bye bye birdie";
   public static final byte[] quit = quitMsg.getBytes();
 
   public static void main(String[] args) {
@@ -122,29 +122,36 @@ public class UDPClient {
       DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
       DataInputStream dis = new DataInputStream(socket.getInputStream());
 
-      String welcome = "Welcome to chatroom with Group 11";
-      byte[] welcomeMsg = new byte[256];
-      welcomeMsg = welcome.getBytes();
-      dos.write(welcomeMsg, 0, welcomeMsg.length);
-
       while(true) {
-        byte[] output = new byte[1024];
-        byte[] buffer = new byte[1024];
-        System.out.println("Enter message: ");
+        byte[] buffer = new byte[256];
+        System.out.println("\nEnter message: ");
         String msg = user.readLine();
-        output = msg.getBytes();
+        String quitCheck = msg.toLowerCase();
+        byte[] output = msg.getBytes();
         int length = output.length;
 
-        if(Arrays.equals(output, quit)) {
+        if(quitCheck.equals(quitMsg)) {
+            dos.write(output, 0, length);
             System.out.println("\nChat ended.");
+            socket.close();
             System.exit(0);
         }
 
         System.out.println("\nYou: " + msg);
         dos.write(output, 0, length);
         dis.read(buffer);
-        String receivedMsg = new String(buffer);
-        System.out.println(clientIP + ": " + receivedMsg);
+        String receivedMsg = new String(buffer).trim();
+        byte[] incoming = receivedMsg.getBytes();
+        String received = new String(incoming);
+        String receivedCheck = received.toLowerCase();
+
+        if(receivedCheck.equals(quitMsg)) {
+            System.out.println("\nChat ended.");
+            socket.close();
+            System.exit(0);
+        }
+
+        System.out.println(clientIP + ": " + received);
 
       }
     }
@@ -156,17 +163,16 @@ public class UDPClient {
   public static void TCPClient(byte[] data) {
     int magicNum = ((data[0] & 0xFF) << 8) | (data[1] & 0xFF);
     byte[] variable = new byte[4];
-    int servPort = data[6];
-    // int servPort2 = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
+    int servPort = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
 
     int j = 0;
     for(int i = 2; i < 6; i++) {
         variable[j] = data[i];
         j++;
     }
-    String servIP = new String(variable);
 
     try{
+      InetAddress servIP = InetAddress.getByAddress(variable);
       Socket socket = new Socket(servIP, servPort);
 
       while(true) {
@@ -174,28 +180,35 @@ public class UDPClient {
         DataOutputStream dos = new DataOutputStream(socket.getOutputStream());
         DataInputStream dis = new DataInputStream(socket.getInputStream());
 
-        byte[] output = new byte[1024];
-        byte[] buffer = new byte[1024];
-        System.out.println("Enter message: ");
+        byte[] buffer = new byte[256];
+        System.out.println("\nEnter message: ");
         String msg = user.readLine();
-        output = msg.getBytes();
+        String quitCheck = msg.toLowerCase();
+        byte[] output = msg.getBytes();
         int length = output.length;
 
-        if(Arrays.equals(output, quit)) {
+        if(quitCheck.equals(quitMsg)) {
+            dos.write(output, 0, length);
             System.out.println("\nChat ended.");
+            socket.close();
             System.exit(0);
         }
 
         System.out.println("\nYou: " + msg);
         dos.write(output, 0, length);
         dis.read(buffer);
+        String receivedMsg = new String(buffer).trim();
+        byte[] incoming = receivedMsg.getBytes();
+        String received = new String(incoming);
+        String receivedCheck = received.toLowerCase();
 
-        if(Arrays.equals(buffer, quit)) {
+        if(receivedCheck.equals(quitMsg)) {
             System.out.println("\nChat ended.");
+            socket.close();
             System.exit(0);
         }
-        String receivedMsg = new String(buffer);
-        System.out.println(servIP + ": " + receivedMsg);
+
+        System.out.println(servIP + ": " + received);
       }
     }
     catch (Exception e) {
