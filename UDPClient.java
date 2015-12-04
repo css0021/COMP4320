@@ -80,19 +80,20 @@ public class UDPClient {
         else {
           if(correctMagic) {
             if (correctGID) {
-                System.out.print("Magic number: " + (((data[0] & 0x00FF) << 8 | + (data[1] & 0x00FF))));
                 //These print statements are for debuggin purposes
-                System.out.print("\nGroup ID: " + data[2]);
-                int portN = ((data[3] & 0xFF) << 8) | (data[4] & 0xFF);
-                System.out.print("\nPort Number: " + portN);
-                System.out.print("\nPort Number: " + incoming.getPort() + "\n");
+                //System.out.print("Magic number: " + (((data[0] & 0x00FF) << 8 | + (data[1] & 0x00FF))));
+                //System.out.print("\nGroup ID: " + data[2]);
+                //int portN = ((data[3] & 0xFF) << 8) | (data[4] & 0xFF);
+                //System.out.print("\nPort Number: " + portN);
+                //System.out.print("\nPort Number: " + incoming.getPort() + "\n");
                 TCPServer(myPort);
             }
             else {
-                System.out.print("Magic number: " + (((data[0] & 0x00FF) << 8 | + (data[1] & 0x00FF))));
-                System.out.println("\nIP Address: " + host + " on Port " + incoming.getPort());
+                //These print statements are for debuggin purposes
+                //System.out.print("Magic number: " + (((data[0] & 0x00FF) << 8 | + (data[1] & 0x00FF))));
+                //System.out.println("\nIP Address: " + host + " on Port " + incoming.getPort());
                 //String ipIn = data[2] + data[3] + data[4] + data[5];
-                int portN = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
+                //int portN = ((data[6] & 0xFF) << 8) | (data[7] & 0xFF);
                 TCPClient(data);
             }
           }
